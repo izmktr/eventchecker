@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import {
   addDays,
+  availableSessionCount,
   dateKey,
   dayAvailability,
   dayLabel,
@@ -44,7 +45,8 @@ import {
   type PersonalStatus,
   type Session,
 } from "@/lib/types";
-import { scheduleRows } from "@/lib/schedule";
+import { dayScheduleRows, scheduleRows } from "@/lib/schedule";
+import { calendarDayClass, type Holidays } from "@/lib/holidays";
 
 type Action = Record<string, string | boolean>;
 type Mutate = (action: Action) => Promise<string | undefined>;
@@ -232,11 +234,13 @@ function RangeControls({
 }
 
 function ThirtyDays({
+  holidays,
   events,
   date,
   mutate,
   busy,
 }: {
+  holidays: Holidays;
   events: EventRecord[];
   date: string;
   mutate: Mutate;
@@ -280,9 +284,9 @@ function ThirtyDays({
               return (
                 <th
                   key={day}
-                  className={`date-heading ${weekday === 0 ? "sunday" : weekday === 6 ? "saturday" : ""} ${day === today() ? "is-today" : ""}`}
+                  className={`date-heading ${calendarDayClass(day, holidays)} ${day === today() ? "is-today" : ""}`}
                 >
-                  <Link href={`/day?date=${day}`} title={dayLabel(day)}>
+                  <Link href={`/day?date=${day}`} title={`${dayLabel(day)}${holidays[day] ? ` ${holidays[day]}` : ""}`}>
                     {day.slice(8)}
                     <small>{"日月火水木金土"[weekday]}</small>
                   </Link>
@@ -320,24 +324,26 @@ function ThirtyDays({
                     const sessions = sessionsByDate.get(day) || [];
                     const reserved = sessions.some((s) => s.reserved);
                     const active = sessions.filter((s) => s.active);
+                    const remaining = availableSessionCount(sessions);
                     const state = dayAvailability(active);
                     return (
                       <td
                         key={day}
-                        className={day === today() ? "today-column" : ""}
+                        className={`${calendarDayClass(day, holidays)} ${day === today() ? "today-column" : ""}`}
                       >
                         {sessions.length > 0 ? (
                           <Link
                             className={`day-cell ${reserved ? "reserved" : state}`}
                             href={`/events/${event.id}?date=${day}`}
-                            title={`${event.title} / ${dayLabel(day)} / ${sessions.length}回 / ${reserved ? "購入済み" : availabilityLabels[state]}`}
+                            title={`${event.title} / ${dayLabel(day)} / 空きあり${remaining}回・全${sessions.length}回 / ${reserved ? "購入済み" : availabilityLabels[state]}`}
+                            aria-label={`${event.title} ${dayLabel(day)} 空きあり${remaining}回・全${sessions.length}回${reserved ? " 購入済み" : ""}`}
                           >
                             {reserved ? (
                               <Check size={16} />
                             ) : (
                               availabilitySymbols[state]
                             )}
-                            <small>{sessions.length}</small>
+                            <small>{remaining}/{sessions.length}</small>
                           </Link>
                         ) : (
                           <span className="no-session">·</span>
@@ -449,14 +455,10 @@ function DayView({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const startOfDay = Date.parse(`${date}T00:00:00+09:00`);
-  const daySessions = (event: EventRecord) =>
-    event.sessions.filter(
-      (s) =>
-        (s.active || s.reserved) &&
-        Date.parse(s.start) < startOfDay + 86400000 &&
-        Date.parse(s.end || s.start) >= startOfDay,
-    );
-  const shown = events.filter((event) => daySessions(event).length > 0);
+  const rows = dayScheduleRows(events, date);
+  const sessionsByEvent = new Map(rows.map((row) => [row.event.id, row.sessions]));
+  const daySessions = (event: EventRecord) => sessionsByEvent.get(event.id) || [];
+  const shown = rows.map((row) => row.event);
   const all = shown.flatMap(daySessions);
   const minHour = Math.max(
     0,
@@ -588,11 +590,13 @@ function DayView({
 }
 
 function Detail({
+  holidays,
   event,
   queryDate,
   mutate,
   busy,
 }: {
+  holidays: Holidays;
   event: EventRecord;
   queryDate: string | null;
   mutate: Mutate;
@@ -716,9 +720,10 @@ function Detail({
               return (
                 <button
                   key={day}
-                  aria-label={`${dayLabel(day)} ${daily.length}回`}
+                  aria-label={`${dayLabel(day)} ${daily.length}回 空きあり${availableSessionCount(daily)}回${holidays[day] ? ` ${holidays[day]}` : ""}`}
+                  title={holidays[day]}
                   aria-pressed={selected === day}
-                  className={`calendar-day ${day.slice(0, 7) !== month.slice(0, 7) ? "outside-month" : ""} ${selected === day ? "selected" : ""}`}
+                  className={`calendar-day ${calendarDayClass(day, holidays)} ${day.slice(0, 7) !== month.slice(0, 7) ? "outside-month" : ""} ${selected === day ? "selected" : ""}`}
                   onClick={() => setSelected(day)}
                 >
                   <span className={day === today() ? "today-number" : ""}>
@@ -735,7 +740,7 @@ function Detail({
                           availabilitySymbols[state]
                         )}
                       </b>
-                      <small>{daily.length}回</small>
+                      <small>空き{availableSessionCount(daily)}/{daily.length}回</small>
                     </>
                   )}
                 </button>
@@ -859,7 +864,7 @@ function Register({ mutate, busy }: { mutate: Mutate; busy: boolean }) {
   );
 }
 
-export default function EventChecker() {
+export default function EventChecker({ holidays }: { holidays: Holidays }) {
   const params = useParams<{ view?: string[] }>();
   const query = useSearchParams();
   const router = useRouter();
@@ -873,7 +878,7 @@ export default function EventChecker() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"all" | PersonalStatus>("all");
+  const [status, setStatus] = useState<"all" | PersonalStatus>("unpurchased");
   const [source, setSource] = useState("all");
   const [mode, setMode] = useState("sqlite");
   async function reload() {
@@ -1033,6 +1038,7 @@ export default function EventChecker() {
         ) : view === "events" ? (
           selectedEvent ? (
             <Detail
+              holidays={holidays}
               key={selectedEvent.id + (queryDate || "")}
               event={selectedEvent}
               queryDate={queryDate}
@@ -1123,6 +1129,7 @@ export default function EventChecker() {
                 </div>
                 {view === "month" ? (
                   <ThirtyDays
+                    holidays={holidays}
                     events={filtered}
                     date={date}
                     mutate={mutate}

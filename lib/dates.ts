@@ -66,3 +66,10 @@ export function dayAvailability(sessions: Session[]): Availability {
   }
   return "unknown";
 }
+
+export function availableSessionCount(sessions: Session[]) {
+  return sessions.filter(
+    (session) => session.active &&
+      (session.availability === "available" || session.availability === "few"),
+  ).length;
+}

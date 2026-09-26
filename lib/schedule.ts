@@ -1,4 +1,4 @@
-import { addDays, dateKey } from "./dates";
+import { addDays, availableSessionCount, dateKey } from "./dates";
 import type { EventRecord, Session } from "./types";
 
 interface ScheduleRow {
@@ -6,6 +6,19 @@ interface ScheduleRow {
   kind: "scheduled" | "future" | "past" | "unknown";
   date: string;
   sessionsByDate: Map<string, Session[]>;
+}
+
+export function dayScheduleRows(events: EventRecord[], date: string) {
+  const start = Date.parse(`${date}T00:00:00+09:00`);
+  return events.map((event) => {
+    const sessions = event.sessions.filter((session) =>
+      (session.active || session.reserved) &&
+      Date.parse(session.start) < start + 86400000 &&
+      Date.parse(session.end || session.start) >= start,
+    );
+    return { event, sessions, available: availableSessionCount(sessions) };
+  }).filter((row) => row.sessions.length > 0)
+    .sort((a, b) => b.available - a.available);
 }
 
 export function scheduleRows(

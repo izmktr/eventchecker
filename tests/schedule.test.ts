@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { scheduleRows } from "../lib/schedule";
+import { dayScheduleRows, scheduleRows } from "../lib/schedule";
+import { availableSessionCount } from "../lib/dates";
 import type { EventRecord } from "../lib/types";
 
 function event(id: string, dates: string[]): EventRecord {
@@ -32,6 +33,29 @@ function event(id: string, dates: string[]): EventRecord {
     })),
   };
 }
+
+test("remaining counts include only active available and few sessions", () => {
+  const sample = event("mixed", Array(7).fill("2026-10-01T01:00:00Z"));
+  const states = ["available", "few", "full", "closed", "pending", "unknown", "available"] as const;
+  sample.sessions.forEach((session, i) => { session.availability = states[i]; });
+  sample.sessions[6].active = false;
+  sample.sessions[6].reserved = true;
+  assert.equal(availableSessionCount(sample.sessions), 2);
+  assert.equal(availableSessionCount([]), 0);
+});
+
+test("day rows prioritize remaining sessions on the selected day without mutating input", () => {
+  const full = event("full", ["2026-10-01T01:00:00Z"]);
+  full.sessions[0].availability = "full";
+  const one = event("one", ["2026-10-01T02:00:00Z", "2026-10-02T02:00:00Z"]);
+  one.sessions[0].availability = "few";
+  const two = event("two", ["2026-10-01T03:00:00Z", "2026-10-01T04:00:00Z"]);
+  const next = event("next", ["2026-10-02T01:00:00Z"]);
+  const input = [full, one, two, next];
+  assert.deepEqual(dayScheduleRows(input, "2026-10-01").map((r) => [r.event.id, r.available]),
+    [["two", 2], ["one", 1], ["full", 0]]);
+  assert.deepEqual(input.map((e) => e.id), ["full", "one", "two", "next"]);
+});
 
 test("30-day rows sort by first visible date, then next future date, then latest past date", () => {
   const input = [
