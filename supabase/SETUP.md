@@ -9,8 +9,10 @@ Supabaseの **SQL Editor** で、このフォルダーの `schema.sql` を実行
 
 ## 2. 自分のログインを作る
 
-1. **Authentication > Users > Add user > Create new user** で `izmktr@gmail.com` を作成し、アプリ用パスワードを設定します。メール確認済み（Auto Confirm User）にします。
-2. SQL Editorで `allow-owner.sql` を実行し、このユーザーだけに利用権限を付与します。
+以下の `owner@example.com` はサンプルです。自分のメールアドレスに置き換えて使用してください。
+
+1. **Authentication > Users > Add user > Create new user** で自分のメールアドレスのユーザーを作成し、アプリ用パスワードを設定します。メール確認済み（Auto Confirm User）にします。
+2. `allow-owner.sql` の `owner@example.com` を自分のメールアドレスに置き換え、SQL Editorで実行し、このユーザーだけに利用権限を付与します。個人用に変更したSQLはコミットしないでください。
 3. Authenticationの設定で新規ユーザーのサインアップを無効にしてください。このアプリに新規登録画面はありません。
 
 パスワードはチャット・ソースコード・環境変数へ記載しません。ログイン画面で直接入力してください。パスワードを忘れた場合はSupabaseの管理画面から対応します。
@@ -20,7 +22,7 @@ Supabaseの **SQL Editor** で、このフォルダーの `schema.sql` を実行
 ローカルでの編集を一時的に止め、最新のデータを次のコマンドで書き出します。
 
 ```powershell
-npx tsx scripts/export-supabase.ts izmktr@gmail.com
+npx tsx scripts/export-supabase.ts owner@example.com
 ```
 
 作成される `.local/supabase-data.sql` をSQL Editorで実行します。ローカルDBは読み取り専用で開き、変更しません。移行先に同じIDの公演がある場合は公演全体をスキップするため、再実行してもクラウド側の購入記録を上書きしません。移行は一度きりの取り込みで、ローカルとの自動同期ではありません。
@@ -30,11 +32,11 @@ npx tsx scripts/export-supabase.ts izmktr@gmail.com
 ## 4. ローカルでクラウド接続を試す
 
 `.env.local` の `EVENTCHECKER_STORAGE` を `supabase` に変更して開発サーバーを再起動します。
-Project URL・Publishable keyは設定済み。`APP_ORIGIN=http://127.0.0.1:3000` なので、このURLで開きます。
+Project URL・Publishable keyを自分のSupabaseプロジェクトの値に置き換えて設定します。`APP_ORIGIN=http://127.0.0.1:3000` なので、このURLで開きます。
 
 ```text
 EVENTCHECKER_STORAGE=supabase
-NEXT_PUBLIC_SUPABASE_URL=https://bcdoqsgrhiurunzdweyg.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=SupabaseのPublishable key
 APP_ORIGIN=http://127.0.0.1:3000
 ```
