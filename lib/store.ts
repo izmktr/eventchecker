@@ -38,13 +38,14 @@ export function createStore(filename: string) {
     CREATE INDEX IF NOT EXISTS sessions_start ON sessions(start);
   `);
 
-  const list = (): EventRecord[] => {
+  const list = (id?: string): EventRecord[] => {
     const rows = db
       .prepare(
         `SELECT e.id, e.data, e.last_error, COALESCE(u.status, 'unpurchased') AS status
-      FROM events e LEFT JOIN user_events u ON u.event_id = e.id AND u.user_id = 'local' ORDER BY e.rowid DESC`,
+      FROM events e LEFT JOIN user_events u ON u.event_id = e.id AND u.user_id = 'local'
+      ${id ? "WHERE e.id = ?" : ""} ORDER BY e.rowid DESC`,
       )
-      .all() as {
+      .all(...(id ? [id] : [])) as {
       id: string;
       data: string;
       last_error: string | null;
@@ -158,6 +159,11 @@ export function createStore(filename: string) {
 
   return {
     list,
+    get: (id: string) => list(id)[0] || null,
+    getSourceUrl: (id: string) => {
+      const row = db.prepare("SELECT data FROM events WHERE id=?").get(id) as { data: string } | undefined;
+      return row ? JSON.parse(row.data).url as string : null;
+    },
     save,
     setStatus,
     reserve,

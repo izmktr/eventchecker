@@ -32,6 +32,12 @@ const globals = globalThis as typeof globalThis & {
 export async function GET(request: NextRequest) {
   try {
     const { store, mode } = await requestStore(request.headers);
+    const id = request.nextUrl.searchParams.get("id");
+    if (id !== null) {
+      if (!id || id.length > 100) return NextResponse.json({ error: "公演IDが不正です。" }, { status: 400 });
+      const event = await store.get(id);
+      return NextResponse.json({ event, mode }, { headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json(
       { events: await store.list(), mode },
       { headers: { "Cache-Control": "no-store" } },
@@ -62,8 +68,7 @@ export async function POST(request: NextRequest) {
           { error: "別の公演を取得中です。完了後にお試しください。" },
           { status: 409 },
         );
-      const existing = (await store.list()).find((event) => event.id === id);
-      const url = action.action === "import" ? action.url : existing?.url;
+      const url = action.action === "import" ? action.url : await store.getSourceUrl(action.id);
       if (!url) throw new Error("公演が見つかりません。");
       const canonical = normalizeSourceUrl(url).href;
       const attempts = (globals.sourceAttempts ??= new Map());
@@ -82,9 +87,9 @@ export async function POST(request: NextRequest) {
       try {
         id = await store.save(await importEvent(url));
       } catch (error) {
-        if (existing)
+        if (action.action === "refresh")
           await store.recordError(
-            existing.id,
+            action.id,
             error instanceof Error ? error.message : "",
           );
         throw error;
@@ -97,7 +102,8 @@ export async function POST(request: NextRequest) {
     else if (action.action === "reserve")
       await store.reserve(action.id, action.sessionId, action.value);
     else if (action.action === "delete") await store.remove(action.id);
-    return NextResponse.json({ events: await store.list(), id, mode });
+    return NextResponse.json({ event: action.action === "delete" ? null : await store.get(id!), id, mode },
+      { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json(
       {

@@ -24,7 +24,7 @@ npm run dev
 ## 対応URLと取得方法
 
 - 東京ミステリーサーカス: `https://ticket.mysterycircus.jp/index.php?dispatch=products.view&product_id=596` 形式。公開日付一覧と日付別カレンダーから最大186日分を取得。所要時間が掲載されている場合、終了時刻はその時間から算出した目安です。
-- 既存のSupabaseを使う場合、東京ミステリーサーカスの登録前に `supabase/migrations/20260928_add_tmc.sql` をSQL Editorで実行してください（新規セットアップでは `schema.sql` に含まれています）。
+- 東京ミステリーサーカスを含む現行のテーブル定義は `supabase/schema.sql` に含まれています。旧構成のSupabaseを更新する場合も、このSQLを再実行できます。
 
 - ESCAPE.ID: `https://escape.id/団体-org/e-公演/`。ページ内のAstroデータと、ページ自身が使う公開開催回一覧から取得。
 - SCRAP: `https://scrapticket.jp/events/show/公演コード`。追跡用クエリは除外し、同じ公演の公開日程も取得。ページ内JSONと、未ログインで利用できる日付・時刻選択処理を使用。

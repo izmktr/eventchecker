@@ -2,8 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { storageMode, isCloudRequest } from "@/lib/cloud-config";
 import { supabaseServer } from "@/lib/supabase-server";
+import { requestAccess, AccessError } from "@/lib/request-store";
 
 export const dynamic = "force-dynamic";
+export async function GET(request: NextRequest) {
+  try {
+    const { mode } = await requestAccess(request.headers);
+    return NextResponse.json({ mode }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "ログイン状態を確認できませんでした。" },
+      { status: error instanceof AccessError ? error.status : 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (storageMode() !== "supabase" || !isCloudRequest(request.headers))

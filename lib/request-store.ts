@@ -12,13 +12,12 @@ export class AccessError extends Error {
   }
 }
 
-export async function requestStore(headers: Headers) {
+export async function requestAccess(headers: Headers) {
   const mode = storageMode();
   if (mode === "sqlite") {
     if (!isLocalRequest(headers))
       throw new AccessError("ローカルからのみ利用できます。", 403);
-    const { getStore } = await import("./store");
-    return { store: getStore(), cloud: null, mode };
+    return { client: null, mode };
   }
   if (!isCloudRequest(headers))
     throw new AccessError(
@@ -37,6 +36,15 @@ export async function requestStore(headers: Headers) {
     throw new AccessError("Supabaseの初期設定を確認してください。", 503);
   if (!member.data)
     throw new AccessError("このアカウントには利用権限がありません。", 403);
+  return { client, mode };
+}
+
+export async function requestStore(headers: Headers) {
+  const { client, mode } = await requestAccess(headers);
+  if (!client) {
+    const { getStore } = await import("./store");
+    return { store: getStore(), cloud: null, mode };
+  }
   const store = createSupabaseStore(client);
   return { store, cloud: store, mode };
 }

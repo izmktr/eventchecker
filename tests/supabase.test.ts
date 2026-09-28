@@ -52,9 +52,8 @@ test("Supabase SQL transactions and row-level access policies", async () => {
     await db.exec(schema);
     await db.exec(schema);
     await db.exec("alter table public.eventchecker_events drop constraint eventchecker_events_source_check; alter table public.eventchecker_events add constraint eventchecker_events_source_check check (source in ('escape', 'scrap'))");
-    const migration = readFileSync(new URL("../supabase/migrations/20260928_add_tmc.sql", import.meta.url), "utf8");
-    await db.exec(migration);
-    await db.exec(migration);
+    await db.exec(schema);
+    await db.exec(schema);
     await db.query("insert into public.eventchecker_members values ($1),($2)", [
       owner,
       other,

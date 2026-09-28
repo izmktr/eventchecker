@@ -882,9 +882,19 @@ export default function EventChecker({ holidays }: { holidays: Holidays }) {
   const [status, setStatus] = useState<"all" | PersonalStatus>("unpurchased");
   const [source, setSource] = useState("all");
   const [mode, setMode] = useState("sqlite");
-  async function reload() {
-    const response = await fetch("/api/events", { cache: "no-store" });
+  const registrationOnly = view === "register";
+  const detailId = view === "events" ? route[1] : undefined;
+  function mergeEvent(event: EventRecord | null, id?: string) {
+    setEvents(previous => event
+      ? previous.some(item => item.id === event.id)
+        ? previous.map(item => item.id === event.id ? event : item)
+        : [event, ...previous]
+      : previous.filter(item => item.id !== id));
+  }
+  async function reload(signal?: AbortSignal) {
+    const response = await fetch(registrationOnly ? "/api/auth" : detailId ? `/api/events?id=${encodeURIComponent(detailId)}` : "/api/events", { cache: "no-store", signal });
     const data = await response.json();
+    if (signal?.aborted) return;
     if (response.status === 401) {
       setEvents([]);
       router.replace("/login");
@@ -892,14 +902,20 @@ export default function EventChecker({ holidays }: { holidays: Holidays }) {
     }
     if (!response.ok)
       throw new Error(data.error || "保存データを読み込めませんでした。");
-    setEvents(data.events);
+    if (!registrationOnly) {
+      if (detailId) mergeEvent(data.event, detailId);
+      else setEvents(data.events);
+    }
     setMode(data.mode || "sqlite");
   }
   useEffect(() => {
-    reload()
-      .catch((error) => setError(error.message))
-      .finally(() => setLoading(false));
-  }, []);
+    const controller = new AbortController();
+    setLoading(true);
+    reload(controller.signal)
+      .catch((error) => { if (!controller.signal.aborted) setError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [registrationOnly, detailId]);
   useEffect(() => {
     setNotice("");
     setError("");
@@ -921,12 +937,21 @@ export default function EventChecker({ holidays }: { holidays: Holidays }) {
         return undefined;
       }
       if (!response.ok) throw new Error(data.error || "処理に失敗しました。");
-      setEvents(data.events);
+      mergeEvent(data.event, data.id);
+      setMode(data.mode || "sqlite");
       if (action.action === "refresh") setNotice("空き状況を更新しました。");
       return data.id ?? "";
     } catch (error) {
       setError(error instanceof Error ? error.message : "処理に失敗しました。");
-      await reload().catch(() => {});
+      // A failed operation can leave authoritative status or refresh warnings changed.
+      // Reconcile only its event rather than reloading the entire collection.
+      if (typeof action.id === "string") {
+        try {
+          const response = await fetch(`/api/events?id=${encodeURIComponent(action.id)}`, { cache: "no-store" });
+          if (response.status === 401) { setEvents([]); router.replace("/login"); }
+          else if (response.ok) { const data = await response.json(); mergeEvent(data.event, action.id); }
+        } catch { /* Keep the last successful snapshot if reconciliation fails. */ }
+      }
       return undefined;
     } finally {
       setBusy(false);
@@ -1032,7 +1057,7 @@ export default function EventChecker({ holidays }: { holidays: Holidays }) {
         {loading ? (
           <div className="loading-screen">
             <LoaderCircle size={22} className="spin" />
-            公演を読み込んでいます…
+            {registrationOnly ? "ログイン状態を確認しています…" : "公演を読み込んでいます…"}
           </div>
         ) : view === "register" ? (
           <Register mutate={mutate} busy={busy} />
