@@ -22,7 +22,7 @@ export interface Session {
 
 export interface EventRecord {
   id: string;
-  source: "escape" | "scrap";
+  source: "escape" | "scrap" | "tmc";
   sourceKey: string;
   url: string;
   title: string;

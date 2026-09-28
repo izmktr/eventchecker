@@ -21,13 +21,15 @@ grant execute on function public.eventchecker_is_member() to authenticated;
 create table if not exists public.eventchecker_events (
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
-  source text not null check (source in ('escape', 'scrap')),
+  source text not null check (source in ('escape', 'scrap', 'tmc')),
   source_key text not null,
   data jsonb not null check (jsonb_typeof(data) = 'object'),
   last_error text,
   created_at timestamptz not null default now(),
   primary key(user_id, id), unique(user_id, source, source_key)
 );
+alter table public.eventchecker_events drop constraint if exists eventchecker_events_source_check;
+alter table public.eventchecker_events add constraint eventchecker_events_source_check check (source in ('escape', 'scrap', 'tmc'));
 create table if not exists public.eventchecker_sessions (
   user_id uuid not null, event_id text not null, id text not null,
   start_at timestamptz not null, data jsonb not null, active boolean not null default true,

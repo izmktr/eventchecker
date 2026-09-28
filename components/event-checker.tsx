@@ -634,7 +634,7 @@ function Detail({
         <Poster event={event} large />
         <div className="event-overview-main">
           <span className="eyebrow">
-            {event.source === "escape" ? "ESCAPE.ID" : "SCRAP TICKET"}{" "}
+            {event.source === "escape" ? "ESCAPE.ID" : event.source === "tmc" ? "東京ミステリーサーカス" : "SCRAP TICKET"}{" "}
             <span>/</span> {event.organizer}
           </span>
           <h1>{event.title}</h1>
@@ -853,6 +853,7 @@ function Register({ mutate, busy }: { mutate: Mutate; busy: boolean }) {
         <div className="supported-sources">
           <span>ESCAPE.ID</span>
           <span>SCRAP TICKET</span>
+          <span>東京ミステリーサーカス</span>
         </div>
         {busy && (
           <p className="muted" role="status">
@@ -1110,6 +1111,7 @@ export default function EventChecker({ holidays }: { holidays: Holidays }) {
                       <option value="all">すべてのサイト</option>
                       <option value="escape">ESCAPE.ID</option>
                       <option value="scrap">SCRAP TICKET</option>
+                      <option value="tmc">東京ミステリーサーカス</option>
                     </select>
                     <select
                       aria-label="購入状態で絞り込み"

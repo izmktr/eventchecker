@@ -3,6 +3,7 @@ import { parse as parseDevalue } from "devalue";
 import { z } from "zod";
 import { addDays, dateKey, monthShift, today } from "./dates";
 import type { Availability, ImportedEvent, Session } from "./types";
+import { parseMysteryCircusInfo, parseMysteryCircusSessions } from "./mystery-circus";
 
 const timestamp = z
   .string()
@@ -78,11 +79,16 @@ export function normalizeSourceUrl(input: string): URL {
   const isScrap =
     url.hostname === "scrapticket.jp" &&
     /^\/events\/show\/[A-Za-z0-9]+\/?$/.test(url.pathname);
-  if (!isEscape && !isScrap)
+  const isMysteryCircus = url.hostname === "ticket.mysterycircus.jp" &&
+    url.pathname === "/index.php" && url.searchParams.get("dispatch") === "products.view" &&
+    /^[1-9]\d*$/.test(url.searchParams.get("product_id") || "") &&
+    url.searchParams.getAll("product_id").length === 1 && url.searchParams.getAll("dispatch").length === 1;
+  if (!isEscape && !isScrap && !isMysteryCircus)
     throw new Error(
-      "ESCAPE.IDの公演ページ、またはスクチケの /events/show/ で始まるURLに対応しています。",
+      "ESCAPE.ID、スクチケ、東京ミステリーサーカスの公演ページURLに対応しています。",
     );
-  url.search = "";
+  const productId = url.searchParams.get("product_id");
+  url.search = isMysteryCircus ? new URLSearchParams({ dispatch: "products.view", product_id: productId! }).toString() : "";
   url.hash = "";
   url.pathname = isEscape
     ? url.pathname.replace(/\/?$/, "/")
@@ -446,7 +452,9 @@ export async function importEvent(input: string) {
   try {
     return url.hostname === "escape.id"
       ? await importEscape(url)
-      : await importScrap(url);
+      : url.hostname === "ticket.mysterycircus.jp"
+        ? await importMysteryCircus(url)
+        : await importScrap(url);
   } catch (error) {
     if (error instanceof z.ZodError || error instanceof SyntaxError)
       throw new Error(
@@ -461,4 +469,31 @@ export async function importEvent(input: string) {
       );
     throw error;
   }
+}
+
+async function importMysteryCircus(url: URL): Promise<ImportedEvent> {
+  const client = new SourceClient(url.origin);
+  const productId = url.searchParams.get("product_id")!;
+  const info = parseMysteryCircusInfo(await client.request(url.href), productId);
+  const dates = info.dates.slice(0, 186);
+  const checkedAt = new Date().toISOString();
+  const sessions: Session[] = [];
+  for (const date of dates) {
+    await pause();
+    const params = new URLSearchParams({ dispatch: "products.link_day", day: date.replaceAll("-", "/"),
+      time_key: "", key: "", filter: "", product_id: productId, is_ajax: "1" });
+    const result = z.object({ html: z.string(), datas: z.object({ product_id: z.string(), date_selected: z.string() }) })
+      .parse(JSON.parse(await client.request(`/index.php?${params}`)));
+    if (result.datas.product_id !== productId || result.datas.date_selected !== date.replaceAll("-", "/"))
+      throw new Error("要求した公演・日付とは異なる日程が返されました。");
+    sessions.push(...parseMysteryCircusSessions(result.html, date, productId, info.venue, info.durationMinutes, checkedAt));
+  }
+  if (new Set(sessions.map(s => s.id)).size !== sessions.length)
+    throw new Error("同じ時刻の開催回が複数あるため、安全に取り込めませんでした。");
+  return { source: "tmc", sourceKey: productId, url: url.href, title: info.title, organizer: "SCRAP",
+    venue: info.venue, durationMinutes: info.durationMinutes,
+    durationLabel: info.durationMinutes ? `約${info.durationMinutes}分（掲載の所要時間）` : "未取得",
+    imageUrl: info.imageUrl, checkedAt, sessions,
+    warning: info.dates.length > 186 ? "日程は最大186日分を取得しています。" : sessions.length ? null : "公開中の開催回がありません。",
+    complete: dates.length > 0, coverageFrom: dates[0] || today(), coverageTo: dates.at(-1) || today() };
 }
