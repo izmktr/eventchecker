@@ -8,14 +8,18 @@ interface ScheduleRow {
   sessionsByDate: Map<string, Session[]>;
 }
 
-export function dayScheduleRows(events: EventRecord[], date: string) {
+export function visibleSessions(sessions: Session[], showSoldOut: boolean) {
+  return sessions.filter(session => showSoldOut || session.availability !== "full" || session.reserved);
+}
+
+export function dayScheduleRows(events: EventRecord[], date: string, showSoldOut = true) {
   const start = Date.parse(`${date}T00:00:00+09:00`);
   return events.map((event) => {
-    const sessions = event.sessions.filter((session) =>
+    const sessions = visibleSessions(event.sessions.filter((session) =>
       (session.active || session.reserved) &&
       Date.parse(session.start) < start + 86400000 &&
       Date.parse(session.end || session.start) >= start,
-    );
+    ), showSoldOut);
     return { event, sessions, available: availableSessionCount(sessions) };
   }).filter((row) => row.sessions.length > 0)
     .sort((a, b) => b.available - a.available);

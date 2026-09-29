@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dayScheduleRows, scheduleRows } from "../lib/schedule";
+import { dayScheduleRows, scheduleRows, visibleSessions } from "../lib/schedule";
 import { availableSessionCount } from "../lib/dates";
 import type { EventRecord } from "../lib/types";
 
@@ -33,6 +33,21 @@ function event(id: string, dates: string[]): EventRecord {
     })),
   };
 }
+
+test("sold-out filter preserves reservations and non-full states", () => {
+  const sample = event("mixed", Array(5).fill("2026-10-01T01:00:00Z"));
+  sample.sessions[0].availability = "full";
+  sample.sessions[1].availability = "full";
+  sample.sessions[1].reserved = true;
+  sample.sessions[2].availability = "closed";
+  sample.sessions[3].availability = "unknown";
+  assert.deepEqual(visibleSessions(sample.sessions, false).map(s => s.id), ["mixed-1", "mixed-2", "mixed-3", "mixed-4"]);
+  assert.equal(visibleSessions(sample.sessions, true).length, 5);
+  const full = event("full", ["2026-10-01T01:00:00Z"]);
+  full.sessions[0].availability = "full";
+  assert.equal(dayScheduleRows([full], "2026-10-01", false).length, 0);
+  assert.equal(dayScheduleRows([full], "2026-10-01", true).length, 1);
+});
 
 test("remaining counts include only active available and few sessions", () => {
   const sample = event("mixed", Array(7).fill("2026-10-01T01:00:00Z"));

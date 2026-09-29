@@ -45,7 +45,7 @@ import {
   type PersonalStatus,
   type Session,
 } from "@/lib/types";
-import { dayScheduleRows, scheduleRows } from "@/lib/schedule";
+import { dayScheduleRows, scheduleRows, visibleSessions } from "@/lib/schedule";
 import { calendarDayClass, type Holidays } from "@/lib/holidays";
 
 type Action = Record<string, string | boolean>;
@@ -369,15 +369,25 @@ function SessionList({
   sessions,
   busy,
   mutate,
+  showSoldOut: controlledShowSoldOut,
 }: {
   event: EventRecord;
   sessions: Session[];
   busy: boolean;
   mutate: Mutate;
+  showSoldOut?: boolean;
 }) {
+  const [showSoldOut, setShowSoldOut] = useState(false);
+  const shown = visibleSessions(sessions, controlledShowSoldOut ?? showSoldOut);
   return (
     <div className="session-list">
-      {sessions.map((session) => (
+      {controlledShowSoldOut === undefined && (
+        <label className="sold-out-toggle">
+          <input type="checkbox" checked={showSoldOut} onChange={e => setShowSoldOut(e.target.checked)} />
+          売り切れを表示
+        </label>
+      )}
+      {shown.map((session) => (
         <div
           className={`session-row ${session.reserved ? "is-reserved" : ""}`}
           key={session.id}
@@ -435,8 +445,8 @@ function SessionList({
           </div>
         </div>
       ))}
-      {sessions.length === 0 && (
-        <div className="empty-inline">この日の公演はありません。</div>
+      {shown.length === 0 && (
+        <div className="empty-inline">{sessions.length ? "売り切れ以外の開催回はありません。" : "この日の公演はありません。"}</div>
       )}
     </div>
   );
@@ -454,8 +464,9 @@ function DayView({
   mutate: Mutate;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [showSoldOut, setShowSoldOut] = useState(false);
   const startOfDay = Date.parse(`${date}T00:00:00+09:00`);
-  const rows = dayScheduleRows(events, date);
+  const rows = dayScheduleRows(events, date, showSoldOut);
   const sessionsByEvent = new Map(rows.map((row) => [row.event.id, row.sessions]));
   const daySessions = (event: EventRecord) => sessionsByEvent.get(event.id) || [];
   const shown = rows.map((row) => row.event);
@@ -485,6 +496,10 @@ function DayView({
   const selectedEvent = shown.find((event) => event.id === selected);
   return (
     <>
+      <label className="sold-out-toggle">
+        <input type="checkbox" checked={showSoldOut} onChange={e => setShowSoldOut(e.target.checked)} />
+        売り切れを表示
+      </label>
       <div className="timeline-scroll" tabIndex={0} aria-label="日別の公演時間">
         <div className="timeline" style={{ minWidth: width + 280 }}>
           <div className="timeline-heading">
@@ -562,7 +577,7 @@ function DayView({
         </div>
         {shown.length === 0 && (
           <div className="empty-inline">
-            この日に登録されている公演はありません。
+            {showSoldOut ? "この日に登録されている公演はありません。" : "表示対象の開催回はありません。"}
           </div>
         )}
       </div>
@@ -580,6 +595,7 @@ function DayView({
           <SessionList
             event={selectedEvent}
             sessions={daySessions(selectedEvent)}
+            showSoldOut={showSoldOut}
             mutate={mutate}
             busy={busy}
           />

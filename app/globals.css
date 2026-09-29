@@ -1093,6 +1093,15 @@ a.outside-range-label:hover {
   filter: brightness(0.96);
   box-shadow: 0 2px 6px #00000010;
 }
+.sold-out-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
 .day-detail {
   margin-top: 24px;
   max-width: 900px;
